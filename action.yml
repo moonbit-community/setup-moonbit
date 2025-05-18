@@ -1,6 +1,6 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: Setup Moonbit
+description: "This action wrap official install script to setup moonbit toolchain"
+author: illusory0x0
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
@@ -9,15 +9,10 @@ branding:
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  version:
+    description: install moonbit version
     required: true
-    default: '1000'
-
-# Define your outputs here.
-outputs:
-  time:
-    description: Your output description here
+    default: "stable"
 
 runs:
   using: node20

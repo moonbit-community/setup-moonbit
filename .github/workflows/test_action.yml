@@ -1,0 +1,59 @@
+name: test action
+
+on:
+  schedule:
+    # Runs at 02:30, only on Friday.
+    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+    - cron: "30 2 * * 5"
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: read
+  checks: write
+  contents: read
+  security-events: write
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        version: [stable, pre-release, bleeding]
+        os:
+          - name: ubuntu-latest
+            triple: x86_64-linux-gnu
+          - name: macos-latest
+            triple: arm64-apple-darwin
+          - name: macos-13
+            triple: x86_64-apple-darwin
+          - name: windows-latest
+            triple: x86_64-w64-mingw32
+
+          # stable check
+
+          # pre-release check
+
+          # bleeding check
+          # 1. install latest toolchain
+          # 2. install latest core library from github.com
+
+      fail-fast: false
+    runs-on: ${{ matrix.os.name }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: test action
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+
+      - name: moon version
+        run: moon version --all
