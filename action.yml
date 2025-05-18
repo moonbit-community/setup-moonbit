@@ -1,4 +1,4 @@
-name: Setup Moonbit
+name: Setup Moon
 description: "This action wrap official install script to setup moonbit toolchain"
 author: illusory0x0
 
