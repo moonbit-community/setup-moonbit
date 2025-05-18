@@ -1,8 +1,8 @@
 {
-  "name": "typescript-action",
-  "description": "GitHub Actions TypeScript template",
+  "name": "setup-moonbit",
+  "description": "setup moonbit toolchain",
   "version": "0.0.0",
-  "author": "",
+  "author": "illusory0x0",
   "type": "module",
   "private": true,
   "homepage": "https://github.com/actions/typescript-action",
