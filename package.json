@@ -5,13 +5,13 @@
   "author": "illusory0x0",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/actions/typescript-action",
+  "homepage": "https://github.com/moonbit-community/setup-moonbit",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/moonbit-community/setup-moonbit.git"
   },
   "bugs": {
-    "url": "https://github.com/actions/typescript-action/issues"
+    "url": "https://github.com/moonbit-community/setup-moonbit/issues"
   },
   "keywords": [
     "actions"
