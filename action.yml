@@ -1,6 +1,6 @@
 name: Setup Moon
 description: "This action wrap official install script to setup moonbit toolchain"
-author: illusory0x0
+author: moonbit-community
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
@@ -10,9 +10,9 @@ branding:
 # Define your inputs here.
 inputs:
   version:
-    description: install moonbit version
+    description: install moonbit version (latest|nightly|pre-release; stable->latest, bleeding->nightly)
     required: true
-    default: "stable"
+    default: "latest"
 
 runs:
   using: node20

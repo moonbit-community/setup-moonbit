@@ -30,45 +30,61 @@ const moon_home_path = path.join(home_path, ".moon");
 
 const moon_bin_path = path.join(moon_home_path, "bin");
 
-type moonbit_version = "stable" | "bleeding" | "pre-release";
+type moonbit_version = "latest" | "nightly" | "pre-release";
+type moonbit_input_version =
+  | "latest"
+  | "nightly"
+  | "pre-release"
+  // Backward-compatible aliases
+  | "stable"
+  | "bleeding";
 
 const WindowInstallVersionEnvVar = "MOONBIT_INSTALL_VERSION";
 
+type moonbit_installer_version = "stable" | "bleeding" | "pre-release";
+
+const to_installer_version = (
+  version: moonbit_version,
+): moonbit_installer_version => {
+  switch (version) {
+    case "latest":
+      return "stable";
+    case "nightly":
+      return "bleeding";
+    case "pre-release":
+      return "pre-release";
+  }
+};
+
 const install_moonbit = async (version: moonbit_version) => {
+  const installer_version = to_installer_version(version);
   if (platform === "win32") {
-    if (version !== "stable") {
-      core.exportVariable(WindowInstallVersionEnvVar, version);
-    }
+    core.exportVariable(WindowInstallVersionEnvVar, installer_version);
     await exec("pwsh", [
       "-c",
       `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm https://cli.moonbitlang.com/install/powershell.ps1 | iex`,
     ]);
   } else {
-    if (version === "stable") {
-      await exec(`bash`, [
-        `-c`,
-        `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash`,
-      ]);
-    } else {
-      await exec(`bash`, [
-        `-c`,
-        `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s ${version}`,
-      ]);
-    }
+    await exec(`bash`, [
+      `-c`,
+      `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s ${installer_version}`,
+    ]);
   }
 };
 
 const get_version = (): moonbit_version => {
   const input = core.getInput("version");
-  switch (input) {
+  switch (input as moonbit_input_version) {
+    case "latest":
     case "stable":
-      return input;
+      return "latest";
+    case "nightly":
     case "bleeding":
-      return input;
+      return "nightly";
     case "pre-release":
-      return input;
+      return "pre-release";
     default:
-      throw Error("unsupported version");
+      throw Error(`unsupported version: ${input}`);
   }
 };
 
@@ -79,7 +95,7 @@ const day = now.getUTCDate();
 const week_of_month = Math.trunc(day / 7) + 1;
 
 const get_key = (version: moonbit_version) => {
-  if (version === "bleeding") {
+  if (version === "nightly") {
     return `${platform}-${arch}-${version}-${year}-${month}-${day}`;
   } else {
     return `${platform}-${arch}-${version}-${year}-${month}-${week_of_month}`;
