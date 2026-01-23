@@ -41,25 +41,9 @@ type moonbit_input_version =
 
 const WindowInstallVersionEnvVar = "MOONBIT_INSTALL_VERSION";
 
-type moonbit_installer_version = "stable" | "bleeding" | "pre-release";
-
-const to_installer_version = (
-  version: moonbit_version,
-): moonbit_installer_version => {
-  switch (version) {
-    case "latest":
-      return "stable";
-    case "nightly":
-      return "bleeding";
-    case "pre-release":
-      return "pre-release";
-  }
-};
-
 const install_moonbit = async (version: moonbit_version) => {
-  const installer_version = to_installer_version(version);
   if (platform === "win32") {
-    core.exportVariable(WindowInstallVersionEnvVar, installer_version);
+    core.exportVariable(WindowInstallVersionEnvVar, version);
     await exec("pwsh", [
       "-c",
       `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm https://cli.moonbitlang.com/install/powershell.ps1 | iex`,
@@ -67,7 +51,7 @@ const install_moonbit = async (version: moonbit_version) => {
   } else {
     await exec(`bash`, [
       `-c`,
-      `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s ${installer_version}`,
+      `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s ${version}`,
     ]);
   }
 };
