@@ -1,19 +1,65 @@
-name: Setup Moon
-description: "This action wrap official install script to setup moonbit toolchain"
+name: Setup Moonbit
+description: Install and configure the Moonbit toolchain
 author: moonbit-community
 
-# Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
   icon: heart
   color: red
 
-# Define your inputs here.
 inputs:
   version:
-    description: install moonbit version (latest|nightly|pre-release; stable->latest, bleeding->nightly)
-    required: true
+    description: moonbit version (latest|nightly|pre-release; stable->latest, bleeding->nightly)
+    required: false
     default: "latest"
 
 runs:
-  using: node20
-  main: dist/index.js
+  using: composite
+  steps:
+    - name: Map version aliases
+      id: version
+      shell: bash
+      run: |
+        case "${{ inputs.version }}" in
+          stable) echo "version=latest" >> $GITHUB_OUTPUT ;;
+          bleeding) echo "version=nightly" >> $GITHUB_OUTPUT ;;
+          *) echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT ;;
+        esac
+
+    - name: Get cache key
+      id: cache-key
+      shell: bash
+      run: |
+        KEY="moon-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}"
+        echo "key=$KEY" >> $GITHUB_OUTPUT
+
+    - name: Restore cache
+      if: runner.os != 'Windows'
+      id: cache-restore
+      uses: actions/cache@v4
+      with:
+        path: ~/.moon
+        key: ${{ steps.cache-key.outputs.key }}
+
+    - name: Install Moonbit (Unix)
+      if: runner.os != 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- ${{ steps.version.outputs.version }}
+
+    - name: Install Moonbit (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $env:MOONBIT_INSTALL_VERSION = "${{ steps.version.outputs.version }}"
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -ErrorAction SilentlyContinue
+        irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+
+    - name: Save cache
+      if: runner.os != 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.moon
+        key: ${{ steps.cache-key.outputs.key }}
+
+    - name: Add to PATH
+      shell: bash
+      run: echo "$HOME/.moon/bin" >> $GITHUB_PATH

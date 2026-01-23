@@ -1,56 +1,37 @@
 # Setup Moonbit
 
-A simple template is provided [here](https://github.com/moonbit-community/moonbit-workflow/blob/master/.github/workflows/check.yaml)
+A GitHub Action that installs and configures the [Moonbit](https://www.moonbitlang.com/) toolchain.
 
-## Input
+## Features
 
-version : string = "latest" | "nightly" | "pre-release"
+- Installs Moonbit toolchain on Linux, macOS, and Windows runners
+- Supports multiple version channels: `latest`, `nightly`, and `pre-release`
+- Caches installations to speed up workflow runs
+- Adds Moonbit binaries to PATH automatically
 
-Aliases:
+## Inputs
 
-- stable -> latest
-- bleeding -> nightly
+| Input     | Description                                                                                                          | Required | Default  |
+| --------- | -------------------------------------------------------------------------------------------------------------------- | -------- | -------- |
+| `version` | Moonbit version to install: `latest`, `nightly`, `pre-release` (or aliases: `stable`→`latest`, `bleeding`→`nightly`) | No       | `latest` |
 
-## Example
+## Example Usage
 
 ```yaml
-- name: Setup Moon
-  # Recommended: pin to a release tag (e.g. v0.1.0) once published.
-  # Until then, use `@main` (or pin to a commit SHA for reproducibility).
+- name: Setup Moonbit
   uses: moonbit-community/setup-moonbit@main
   with:
     version: latest
 ```
 
-## Contributing
+## Version Channels
 
-Prereqs: Node.js >= 20 and npm.
+| Channel                 | Description           |
+| ----------------------- | --------------------- |
+| `latest` or `stable`    | Latest stable release |
+| `nightly` or `bleeding` | Latest nightly build  |
+| `pre-release`           | Pre-release version   |
 
-### Local setup
+## License
 
-```bash
-npm install
-```
-
-### Common tasks
-
-```bash
-# Format, lint, test, build, and refresh dist/ in one go
-npm run all
-
-# Or run steps individually
-npm run format:write
-npm run lint
-npm run test
-npm run package
-```
-
-### Important: update dist/
-
-This action checks in the compiled output. If you change `src/`, run:
-
-```bash
-npm run bundle
-```
-
-Then commit the updated `dist/` files along with your changes.
+MIT
