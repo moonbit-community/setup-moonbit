@@ -62,3 +62,7 @@ runs:
     - name: Add to PATH
       shell: bash
       run: echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+    - name: Update Moonbit
+      shell: bash
+      run: moon update
