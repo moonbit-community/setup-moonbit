@@ -25,19 +25,127 @@ runs:
           *) echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT ;;
         esac
 
-    - name: Get cache key
-      id: cache-key
+    - name: Resolve paths (Unix)
+      if: runner.os != 'Windows'
+      id: paths
       shell: bash
       run: |
-        KEY="moon-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}"
-        echo "key=$KEY" >> $GITHUB_OUTPUT
+        moon_home="${MOON_HOME:-$HOME/.moon}"
+        echo "moon_home=$moon_home" >> $GITHUB_OUTPUT
+        echo "moon_bin=$moon_home/bin" >> $GITHUB_OUTPUT
+
+    - name: Resolve paths (Windows)
+      if: runner.os == 'Windows'
+      id: paths-windows
+      shell: pwsh
+      run: |
+        $moonHome = if ($env:MOON_HOME) { $env:MOON_HOME } else { "$env:USERPROFILE\.moon" }
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "moon_home=$moonHome" -Encoding utf8
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "moon_bin=$moonHome\bin" -Encoding utf8
+
+    - name: Resolve download info (Unix)
+      if: runner.os != 'Windows'
+      id: download
+      shell: bash
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        set -euo pipefail
+        version_encoded="${VERSION//+/%2B}"
+        target=""
+        case "$(uname -ms)" in
+          "Darwin arm64") target="darwin-aarch64" ;;
+          "Linux x86_64") target="linux-x86_64" ;;
+          *) echo "Unsupported platform: $(uname -ms)" >&2; exit 1 ;;
+        esac
+        if [[ -n "${MOONBIT_INSTALL_DEV:-}" ]]; then
+          target="${target}-dev"
+        fi
+        cli="https://cli.moonbitlang.com"
+        moonbit_uri="$cli/binaries/$version_encoded/moonbit-$target.tar.gz"
+        core_uri="$cli/cores/core-$version_encoded.tar.gz"
+
+        moonbit_headers="$(curl -fsSLI "$moonbit_uri" | tr -d '\r')"
+        core_headers="$(curl -fsSLI "$core_uri" | tr -d '\r')"
+
+        moonbit_stamp="$(printf '%s\n' "$moonbit_headers" | awk -F': ' 'tolower($1)=="etag"{print $2; exit}')"
+        if [[ -z "$moonbit_stamp" ]]; then
+          moonbit_stamp="$(printf '%s\n' "$moonbit_headers" | awk -F': ' 'tolower($1)=="last-modified"{print $2; exit}')"
+        fi
+        if [[ -z "$moonbit_stamp" ]]; then
+          moonbit_stamp="$(printf '%s\n' "$moonbit_headers" | awk -F': ' 'tolower($1)=="content-length"{print $2; exit}')"
+        fi
+        if [[ -z "$moonbit_stamp" ]]; then
+          moonbit_stamp="$version_encoded"
+        fi
+        moonbit_sig="$(printf '%s' "$moonbit_stamp" | shasum -a 256 | awk '{print $1}')"
+
+        core_stamp="$(printf '%s\n' "$core_headers" | awk -F': ' 'tolower($1)=="etag"{print $2; exit}')"
+        if [[ -z "$core_stamp" ]]; then
+          core_stamp="$(printf '%s\n' "$core_headers" | awk -F': ' 'tolower($1)=="last-modified"{print $2; exit}')"
+        fi
+        if [[ -z "$core_stamp" ]]; then
+          core_stamp="$(printf '%s\n' "$core_headers" | awk -F': ' 'tolower($1)=="content-length"{print $2; exit}')"
+        fi
+        if [[ -z "$core_stamp" ]]; then
+          core_stamp="$version_encoded"
+        fi
+        core_sig="$(printf '%s' "$core_stamp" | shasum -a 256 | awk '{print $1}')"
+
+        cache_key="moon-${target}-${version_encoded}-${moonbit_sig}-${core_sig}"
+        echo "cache_key=$cache_key" >> $GITHUB_OUTPUT
+
+    - name: Resolve download info (Windows)
+      if: runner.os == 'Windows'
+      id: download-windows
+      shell: pwsh
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        $versionEncoded = $env:VERSION -replace '\+', '%2B'
+        if ($env:PROCESSOR_ARCHITECTURE -ne "AMD64") {
+          throw "Unsupported platform: $env:PROCESSOR_ARCHITECTURE"
+        }
+        $cli = "https://cli.moonbitlang.com"
+        $target = if ($env:MOONBIT_INSTALL_DEV) { "windows-x86_64-dev" } else { "windows-x86_64" }
+        $moonbitUri = "$cli/binaries/$versionEncoded/moonbit-$target.zip"
+        $coreUri = "$cli/cores/core-$versionEncoded.zip"
+
+        function Get-Stamp([string]$uri) {
+          $resp = Invoke-WebRequest -Method Head -Uri $uri -UseBasicParsing
+          $etag = $resp.Headers.ETag
+          if ($etag) { return $etag }
+          $last = $resp.Headers["Last-Modified"]
+          if ($last) { return $last }
+          $len = $resp.Headers["Content-Length"]
+          if ($len) { return $len }
+          return ""
+        }
+
+        function Get-Hash([string]$value) {
+          if (-not $value) { return "" }
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
+          $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+          return ([System.BitConverter]::ToString($hash) -replace "-", "").ToLower()
+        }
+
+        $moonbitStamp = Get-Stamp $moonbitUri
+        if (-not $moonbitStamp) { $moonbitStamp = $versionEncoded }
+        $coreStamp = Get-Stamp $coreUri
+        if (-not $coreStamp) { $coreStamp = $versionEncoded }
+
+        $moonbitSig = Get-Hash $moonbitStamp
+        $coreSig = Get-Hash $coreStamp
+
+        $cacheKey = "moon-$target-$versionEncoded-$moonbitSig-$coreSig"
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "cache_key=$cacheKey" -Encoding utf8
 
     - name: Restore cache
       id: cache-restore
       uses: actions/cache@v4
       with:
-        path: ~/.moon
-        key: ${{ steps.cache-key.outputs.key }}
+        path: ${{ runner.os == 'Windows' && steps.paths-windows.outputs.moon_home || steps.paths.outputs.moon_home }}
+        key: ${{ runner.os == 'Windows' && steps.download-windows.outputs.cache_key || steps.download.outputs.cache_key }}
 
     - name: Install Moonbit (Unix)
       if: runner.os != 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
@@ -45,24 +153,37 @@ runs:
       run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- ${{ steps.version.outputs.version }}
 
     - name: Install Moonbit (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         $env:MOONBIT_INSTALL_VERSION = "${{ steps.version.outputs.version }}"
         Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -ErrorAction SilentlyContinue
         irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
 
+    - name: Add to PATH (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: echo "${{ steps.paths.outputs.moon_bin }}" >> $GITHUB_PATH
+
+    - name: Add to PATH (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Add-Content -Path $env:GITHUB_PATH -Value "${{ steps.paths-windows.outputs.moon_bin }}" -Encoding utf8
+
+    - name: Update Moonbit (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: moon update
+
+    - name: Update Moonbit (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: moon update
+
     - name: Save cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache@v4
       with:
-        path: ~/.moon
-        key: ${{ steps.cache-key.outputs.key }}
-
-    - name: Add to PATH
-      shell: bash
-      run: echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-    - name: Update Moonbit
-      shell: bash
-      run: moon update
+        path: ${{ runner.os == 'Windows' && steps.paths-windows.outputs.moon_home || steps.paths.outputs.moon_home }}
+        key: ${{ runner.os == 'Windows' && steps.download-windows.outputs.cache_key || steps.download.outputs.cache_key }}

@@ -1,0 +1,52 @@
+name: Test Action
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        version:
+          - latest
+          - nightly
+          - pre-release
+        include:
+          - os: ubuntu-latest
+            version: stable
+          - os: ubuntu-latest
+            version: bleeding
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Moonbit
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+
+      - name: Show Moonbit version (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: moon version --all
+
+      - name: Show Moonbit version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: moon version --all
