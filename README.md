@@ -6,8 +6,8 @@ A GitHub Action that installs and configures the [Moonbit](https://www.moonbitla
 
 - Installs Moonbit toolchain on Linux, macOS, and Windows runners
 - Supports multiple version channels: `latest`, `nightly`, and `pre-release`
-- Caches installations to speed up workflow runs
 - Adds Moonbit binaries to PATH automatically
+- Runs `moon update` to refresh registry information
 
 ## Inputs
 

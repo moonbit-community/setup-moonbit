@@ -41,12 +41,25 @@ jobs:
         with:
           version: ${{ matrix.version }}
 
-      - name: Show Moonbit version (Unix)
+      - name: Verify Moonbit install (Unix)
         if: runner.os != 'Windows'
         shell: bash
-        run: moon version --all
+        run: |
+          set -euo pipefail
+          command -v moon
+          moon version --all
+          moon_home="${MOON_HOME:-$HOME/.moon}"
+          test -x "$moon_home/bin/moon"
 
-      - name: Show Moonbit version (Windows)
+      - name: Verify Moonbit install (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: moon version --all
+        run: |
+          if (-not (Get-Command moon -ErrorAction SilentlyContinue)) {
+            throw "moon is not on PATH"
+          }
+          moon version --all
+          $moonHome = if ($env:MOON_HOME) { $env:MOON_HOME } else { "$env:USERPROFILE\.moon" }
+          if (-not (Test-Path -Path "$moonHome\bin\moon.exe")) {
+            throw "moon.exe not found in $moonHome\bin"
+          }

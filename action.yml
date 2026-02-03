@@ -15,7 +15,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Resolve inputs and cache key (Unix)
+    - name: Resolve inputs (Unix)
       if: runner.os != 'Windows'
       shell: bash
       env:
@@ -27,7 +27,7 @@ runs:
           python "$GITHUB_ACTION_PATH/scripts/resolve.py"
         fi
 
-    - name: Resolve inputs and cache key (Windows)
+    - name: Resolve inputs (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       env:
@@ -36,22 +36,15 @@ runs:
         $script = Join-Path $env:GITHUB_ACTION_PATH "scripts/resolve.py"
         python $script
 
-    - name: Restore cache
-      id: cache-restore
-      uses: actions/cache@v4
-      with:
-        path: ${{ env.MOONBIT_MOON_HOME }}
-        key: ${{ env.MOONBIT_CACHE_KEY }}
-
     - name: Install Moonbit (Unix)
-      if: runner.os != 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
+      if: runner.os != 'Windows'
       shell: bash
       env:
         MOON_HOME: ${{ env.MOONBIT_MOON_HOME }}
       run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- ${{ env.MOONBIT_RESOLVED_VERSION }}
 
     - name: Install Moonbit (Windows)
-      if: runner.os == 'Windows' && steps.cache-restore.outputs.cache-hit != 'true'
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $env:MOONBIT_INSTALL_VERSION = "${{ env.MOONBIT_RESOLVED_VERSION }}"
@@ -79,10 +72,3 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: moon update
-
-    - name: Save cache
-      if: steps.cache-restore.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: ${{ env.MOONBIT_MOON_HOME }}
-        key: ${{ env.MOONBIT_CACHE_KEY }}
