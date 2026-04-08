@@ -22,6 +22,13 @@ Aliases:
     version: latest
 ```
 
+## Cache behavior
+
+On non-Windows runners, this action caches `~/.moon`.
+
+- The cache key is derived from the requested channel, the resolved download target, and the published `.sha256` for the MoonBit archive.
+- `latest`, `nightly`, and `pre-release` therefore refresh when the upstream MoonBit archive changes, instead of on a fixed calendar bucket.
+
 ## Contributing
 
 Prereqs: Node.js >= 20 and npm.
