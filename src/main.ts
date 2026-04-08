@@ -1,64 +1,50 @@
+import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 import { exec } from "@actions/exec";
-import * as cache from "@actions/cache";
 import * as path from "node:path";
-import { info, warning } from "@actions/core";
 
-enum Github_HOME_PATH {
-  Linux = "/home/runner",
-  Windows = "C:\\Users\\runneradmin",
-  Darwin = "/Users/runner",
-}
+const cliMoonbit = "https://cli.moonbitlang.com";
 const platform = core.platform.platform;
 const arch = core.platform.arch;
 
-const get_home_path = () => {
-  switch (platform) {
-    case "linux":
-      return Github_HOME_PATH.Linux;
-    case "win32":
-      return Github_HOME_PATH.Windows;
-    case "darwin":
-      return Github_HOME_PATH.Darwin;
-    default:
-      throw Error("support os");
-  }
-};
-const home_path = get_home_path();
-
-const moon_home_path = path.join(home_path, ".moon");
-
-const moon_bin_path = path.join(moon_home_path, "bin");
-
-type moonbit_version = "latest" | "nightly" | "pre-release";
-type moonbit_input_version =
+type MoonbitVersion = "latest" | "nightly" | "pre-release";
+type MoonbitInputVersion =
   | "latest"
   | "nightly"
   | "pre-release"
-  // Backward-compatible aliases
   | "stable"
   | "bleeding";
+type BaseMoonbitTarget =
+  | "darwin-aarch64"
+  | "linux-aarch64"
+  | "linux-x86_64"
+  | "windows-x86_64";
+type MoonbitTarget = BaseMoonbitTarget | `${BaseMoonbitTarget}-dev`;
 
-const WindowInstallVersionEnvVar = "MOONBIT_INSTALL_VERSION";
+const windowsInstallVersionEnvVar = "MOONBIT_INSTALL_VERSION";
+const moonHomePath = path.join(getHomePath(), ".moon");
+const moonBinPath = path.join(moonHomePath, "bin");
 
-const install_moonbit = async (version: moonbit_version) => {
-  if (platform === "win32") {
-    core.exportVariable(WindowInstallVersionEnvVar, version);
-    await exec("pwsh", [
-      "-c",
-      `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm https://cli.moonbitlang.com/install/powershell.ps1 | iex`,
-    ]);
-  } else {
-    await exec(`bash`, [
-      `-c`,
-      `curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s ${version}`,
-    ]);
+function getHomePath(): string {
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"];
+  if (home) {
+    return home;
   }
-};
 
-const get_version = (): moonbit_version => {
-  const input = core.getInput("version");
-  switch (input as moonbit_input_version) {
+  switch (platform) {
+    case "linux":
+      return "/home/runner";
+    case "win32":
+      return "C:\\Users\\runneradmin";
+    case "darwin":
+      return "/Users/runner";
+    default:
+      throw Error(`unsupported platform: ${platform}`);
+  }
+}
+
+function normalizeVersion(input: string): MoonbitVersion {
+  switch (input as MoonbitInputVersion) {
     case "latest":
     case "stable":
       return "latest";
@@ -70,42 +56,141 @@ const get_version = (): moonbit_version => {
     default:
       throw Error(`unsupported version: ${input}`);
   }
-};
+}
 
-const now = new Date();
-const year = now.getUTCFullYear();
-const month = now.getUTCMonth();
-const day = now.getUTCDate();
-const week_of_month = Math.trunc(day / 7) + 1;
+function getVersion(): MoonbitVersion {
+  return normalizeVersion(core.getInput("version"));
+}
 
-const get_key = (version: moonbit_version) => {
-  if (version === "nightly") {
-    return `${platform}-${arch}-${version}-${year}-${month}-${day}`;
-  } else {
-    return `${platform}-${arch}-${version}-${year}-${month}-${week_of_month}`;
+function getBaseTarget(
+  platform: NodeJS.Platform,
+  arch: string,
+): BaseMoonbitTarget {
+  switch (platform) {
+    case "darwin":
+      if (arch === "arm64") {
+        return "darwin-aarch64";
+      }
+      break;
+    case "linux":
+      if (arch === "arm64") {
+        return "linux-aarch64";
+      }
+      if (arch === "x64") {
+        return "linux-x86_64";
+      }
+      break;
+    case "win32":
+      if (arch === "x64" || arch === "arm64") {
+        return "windows-x86_64";
+      }
+      break;
   }
-};
+
+  throw Error(`unsupported platform: ${platform} ${arch}`);
+}
+
+function getTarget(
+  platform: NodeJS.Platform,
+  arch: string,
+  installDev = Boolean(process.env["MOONBIT_INSTALL_DEV"]),
+): MoonbitTarget {
+  const target = getBaseTarget(platform, arch);
+  return installDev ? `${target}-dev` : target;
+}
+
+function getMoonbitArchiveUrl(
+  version: MoonbitVersion,
+  target: MoonbitTarget,
+): string {
+  const archiveExtension = target.startsWith("windows-") ? "zip" : "tar.gz";
+  return `${cliMoonbit}/binaries/${encodeURIComponent(version)}/moonbit-${target}.${archiveExtension}`;
+}
+
+async function fetchSha256(url: string): Promise<string> {
+  const checksumUrl = `${url}.sha256`;
+  const response = await fetch(checksumUrl);
+  if (!response.ok) {
+    throw Error(`failed to fetch ${checksumUrl}: ${response.status}`);
+  }
+
+  const [sha256 = ""] = (await response.text()).trim().split(/\s+/, 1);
+  if (!/^[0-9a-fA-F]{64}$/.test(sha256)) {
+    throw Error(`invalid sha256 in ${checksumUrl}`);
+  }
+
+  return sha256.toLowerCase();
+}
+
+function getCacheKey(
+  target: MoonbitTarget,
+  version: MoonbitVersion,
+  moonbitSha256: string,
+): string {
+  return `${target}-${version}-${moonbitSha256}`;
+}
+
+async function tryGetCacheKey(
+  version: MoonbitVersion,
+): Promise<string | undefined> {
+  try {
+    const target = getTarget(platform, arch);
+    const moonbitArchiveUrl = getMoonbitArchiveUrl(version, target);
+    const moonbitSha256 = await fetchSha256(moonbitArchiveUrl);
+    return getCacheKey(target, version, moonbitSha256);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    core.warning(
+      `skipping cache because upstream checksum could not be resolved: ${message}`,
+    );
+    return undefined;
+  }
+}
+
+async function installMoonbit(version: MoonbitVersion): Promise<void> {
+  if (platform === "win32") {
+    core.exportVariable(windowsInstallVersionEnvVar, version);
+    await exec("pwsh", [
+      "-c",
+      `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm ${cliMoonbit}/install/powershell.ps1 | iex`,
+    ]);
+    return;
+  }
+
+  await exec("bash", [
+    "-c",
+    `curl -fsSL ${cliMoonbit}/install/unix.sh | bash -s ${version}`,
+  ]);
+}
 
 export async function run(): Promise<void> {
   try {
-    const version = get_version();
-    if (platform !== "win32") {
-      const key = get_key(version);
-      const cache_path = moon_home_path;
-      const is_cache = await cache.restoreCache([cache_path], key);
-      if (is_cache === undefined) {
-        info("cache miss");
-        await install_moonbit(version);
-        await cache.saveCache([cache_path], key);
-      } else {
-        info("cache hit");
-      }
+    const version = getVersion();
+
+    if (platform === "win32") {
+      await installMoonbit(version);
     } else {
-      await install_moonbit(version);
+      const key = await tryGetCacheKey(version);
+      if (key === undefined) {
+        await installMoonbit(version);
+      } else {
+        const cacheHit = await cache.restoreCache([moonHomePath], key);
+        if (cacheHit === undefined) {
+          core.info("cache miss");
+          await installMoonbit(version);
+          await cache.saveCache([moonHomePath], key);
+        } else {
+          core.info("cache hit");
+        }
+      }
     }
 
-    core.addPath(moon_bin_path);
+    core.addPath(moonBinPath);
   } catch (error) {
-    if (error instanceof Error) core.setFailed(error.message);
+    if (error instanceof Error) {
+      core.setFailed(error.message);
+    }
   }
 }
+
+export { getCacheKey, getMoonbitArchiveUrl, getTarget, normalizeVersion };
