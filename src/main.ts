@@ -1,6 +1,7 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 import { exec } from "@actions/exec";
+import { homedir } from "node:os";
 import * as path from "node:path";
 
 const cliMoonbit = "https://cli.moonbitlang.com";
@@ -14,34 +15,15 @@ type MoonbitInputVersion =
   | "pre-release"
   | "stable"
   | "bleeding";
-type BaseMoonbitTarget =
+type MoonbitTarget =
   | "darwin-aarch64"
   | "linux-aarch64"
   | "linux-x86_64"
   | "windows-x86_64";
-type MoonbitTarget = BaseMoonbitTarget | `${BaseMoonbitTarget}-dev`;
 
 const windowsInstallVersionEnvVar = "MOONBIT_INSTALL_VERSION";
-const moonHomePath = path.join(getHomePath(), ".moon");
+const moonHomePath = path.join(homedir(), ".moon");
 const moonBinPath = path.join(moonHomePath, "bin");
-
-function getHomePath(): string {
-  const home = process.env["HOME"] ?? process.env["USERPROFILE"];
-  if (home) {
-    return home;
-  }
-
-  switch (platform) {
-    case "linux":
-      return "/home/runner";
-    case "win32":
-      return "C:\\Users\\runneradmin";
-    case "darwin":
-      return "/Users/runner";
-    default:
-      throw Error(`unsupported platform: ${platform}`);
-  }
-}
 
 function normalizeVersion(input: string): MoonbitVersion {
   switch (input as MoonbitInputVersion) {
@@ -62,10 +44,7 @@ function getVersion(): MoonbitVersion {
   return normalizeVersion(core.getInput("version"));
 }
 
-function getBaseTarget(
-  platform: NodeJS.Platform,
-  arch: string,
-): BaseMoonbitTarget {
+function getTarget(platform: NodeJS.Platform, arch: string): MoonbitTarget {
   switch (platform) {
     case "darwin":
       if (arch === "arm64") {
@@ -88,15 +67,6 @@ function getBaseTarget(
   }
 
   throw Error(`unsupported platform: ${platform} ${arch}`);
-}
-
-function getTarget(
-  platform: NodeJS.Platform,
-  arch: string,
-  installDev = Boolean(process.env["MOONBIT_INSTALL_DEV"]),
-): MoonbitTarget {
-  const target = getBaseTarget(platform, arch);
-  return installDev ? `${target}-dev` : target;
 }
 
 function getMoonbitArchiveUrl(
@@ -149,11 +119,19 @@ async function tryGetCacheKey(
 
 async function installMoonbit(version: MoonbitVersion): Promise<void> {
   if (platform === "win32") {
-    core.exportVariable(windowsInstallVersionEnvVar, version);
-    await exec("pwsh", [
-      "-c",
-      `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm ${cliMoonbit}/install/powershell.ps1 | iex`,
-    ]);
+    await exec(
+      "pwsh",
+      [
+        "-c",
+        `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; irm ${cliMoonbit}/install/powershell.ps1 | iex`,
+      ],
+      {
+        env: {
+          ...process.env,
+          [windowsInstallVersionEnvVar]: version,
+        },
+      },
+    );
     return;
   }
 
@@ -171,17 +149,35 @@ export async function run(): Promise<void> {
     if (platform === "win32") {
       await installMoonbit(version);
     } else {
-      const key = await tryGetCacheKey(version, target);
-      if (key === undefined) {
+      if (!cache.isFeatureAvailable()) {
+        core.info("cache service unavailable");
         await installMoonbit(version);
       } else {
-        const cacheHit = await cache.restoreCache([moonHomePath], key);
-        if (cacheHit === undefined) {
-          core.info("cache miss");
+        const key = await tryGetCacheKey(version, target);
+        if (key === undefined) {
           await installMoonbit(version);
-          await cache.saveCache([moonHomePath], key);
         } else {
-          core.info("cache hit");
+          try {
+            const cacheHit = await cache.restoreCache([moonHomePath], key);
+            if (cacheHit === undefined) {
+              core.info("cache miss");
+              await installMoonbit(version);
+              try {
+                await cache.saveCache([moonHomePath], key);
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : String(error);
+                core.warning(`cache save failed: ${message}`);
+              }
+            } else {
+              core.info("cache hit");
+            }
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            core.warning(`cache restore failed: ${message}`);
+            await installMoonbit(version);
+          }
         }
       }
     }

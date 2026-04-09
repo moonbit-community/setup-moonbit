@@ -58,6 +58,7 @@ On non-Windows runners, this action caches `~/.moon`.
 
 - The cache key is derived from the requested channel, the resolved download target, and the published `.sha256` for the MoonBit archive.
 - `latest`, `nightly`, and `pre-release` therefore refresh when the upstream MoonBit archive changes, instead of on a fixed calendar bucket.
+- Cache restore/save is best-effort. If the cache service is unavailable or a cache operation fails, the action still installs MoonBit normally.
 
 ## Contributing
 

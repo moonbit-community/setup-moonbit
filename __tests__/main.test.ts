@@ -26,21 +26,15 @@ describe("normalizeVersion", () => {
 
 describe("getTarget", () => {
   test("maps supported runner targets", () => {
-    expect(getTarget("darwin", "arm64", false)).toBe("darwin-aarch64");
-    expect(getTarget("linux", "arm64", false)).toBe("linux-aarch64");
-    expect(getTarget("linux", "x64", false)).toBe("linux-x86_64");
-    expect(getTarget("win32", "x64", false)).toBe("windows-x86_64");
-    expect(getTarget("win32", "arm64", false)).toBe("windows-x86_64");
-  });
-
-  test("includes the dev suffix when requested", () => {
-    expect(getTarget("linux", "x64", true)).toBe("linux-x86_64-dev");
+    expect(getTarget("darwin", "arm64")).toBe("darwin-aarch64");
+    expect(getTarget("linux", "arm64")).toBe("linux-aarch64");
+    expect(getTarget("linux", "x64")).toBe("linux-x86_64");
+    expect(getTarget("win32", "x64")).toBe("windows-x86_64");
+    expect(getTarget("win32", "arm64")).toBe("windows-x86_64");
   });
 
   test("rejects unsupported targets", () => {
-    expect(() => getTarget("darwin", "x64", false)).toThrow(
-      "unsupported platform",
-    );
+    expect(() => getTarget("darwin", "x64")).toThrow("unsupported platform");
   });
 });
 
