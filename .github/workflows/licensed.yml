@@ -5,15 +5,6 @@
 name: Licensed
 
 on:
-  # Uncomment the below lines to run this workflow on pull requests and pushes
-  # to the default branch. This is useful for checking licenses before merging
-  # changes into the default branch.
-  # pull_request:
-  #   branches:
-  #     - main
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
 
 permissions:
@@ -26,22 +17,18 @@ jobs:
 
     steps:
       - name: Checkout
-        id: checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        id: setup-node
         uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: npm
 
       - name: Install Dependencies
-        id: npm-ci
         run: npm ci
 
       - name: Setup Ruby
-        id: setup-ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ruby
@@ -51,24 +38,19 @@ jobs:
           version: 4.x
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      # If this is a workflow_dispatch event, update the cached licenses.
-      - if: ${{ github.event_name == 'workflow_dispatch' }}
-        name: Update Licenses
-        id: update-licenses
+      - name: Update Licenses
         run: licensed cache
 
-      # Then, commit the updated licenses to the repository.
-      - if: ${{ github.event_name == 'workflow_dispatch' }}
-        name: Commit Licenses
-        id: commit-licenses
+      - name: Commit Licenses
         run: |
           git config --local user.email "licensed-ci@users.noreply.github.com"
           git config --local user.name "licensed-ci"
-          git add .
+          git add -A .licensed.yml .licenses/
+          if git diff --cached --quiet; then
+            exit 0
+          fi
           git commit -m "Auto-update license files"
           git push
 
-      # Last, check the status of the cached licenses.
       - name: Check Licenses
-        id: check-licenses
         run: licensed status

@@ -74477,9 +74477,8 @@ async function fetchSha256(url) {
 function getCacheKey(target, version, moonbitSha256) {
     return `${target}-${version}-${moonbitSha256}`;
 }
-async function tryGetCacheKey(version) {
+async function tryGetCacheKey(version, target) {
     try {
-        const target = getTarget(platform, arch);
         const moonbitArchiveUrl = getMoonbitArchiveUrl(version, target);
         const moonbitSha256 = await fetchSha256(moonbitArchiveUrl);
         return getCacheKey(target, version, moonbitSha256);
@@ -74507,11 +74506,12 @@ async function installMoonbit(version) {
 async function run() {
     try {
         const version = getVersion();
+        const target = getTarget(platform, arch);
         if (platform === "win32") {
             await installMoonbit(version);
         }
         else {
-            const key = await tryGetCacheKey(version);
+            const key = await tryGetCacheKey(version, target);
             if (key === undefined) {
                 await installMoonbit(version);
             }
