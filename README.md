@@ -1,6 +1,37 @@
 # Setup Moonbit
 
-A simple template is provided [here](https://github.com/moonbit-community/moonbit-workflow/blob/master/.github/workflows/check.yaml)
+Add this action directly to your workflow. Start from a normal job in your own
+repository instead of a separate template repo.
+
+## Example
+
+```yaml
+name: check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Moon
+        # Recommended: pin to a commit SHA for reproducibility until release tags exist.
+        uses: moonbit-community/setup-moonbit@main
+        with:
+          version: latest
+
+      - name: Moon version
+        run: moon version --all
+
+      - name: Check
+        run: moon check --target all
+```
 
 ## Input
 
@@ -11,16 +42,15 @@ Aliases:
 - stable -> latest
 - bleeding -> nightly
 
-## Example
+## Supported Platforms
 
-```yaml
-- name: Setup Moon
-  # Recommended: pin to a release tag (e.g. v0.1.0) once published.
-  # Until then, use `@main` (or pin to a commit SHA for reproducibility).
-  uses: moonbit-community/setup-moonbit@main
-  with:
-    version: latest
-```
+- macOS `aarch64`
+- Linux `x86_64`
+- Linux `aarch64`
+- Windows `x86_64`
+- Windows `arm64` via the `x86_64` archive
+
+Intel macOS runners are not supported.
 
 ## Cache behavior
 
